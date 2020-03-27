@@ -1,7 +1,7 @@
 /*
  * strcpy test.
  *
- * Copyright (c) 2019, Arm Limited.
+ * Copyright (c) 2019-2020, Arm Limited.
  * SPDX-License-Identifier: MIT
  */
 
@@ -61,7 +61,7 @@ static void test(const struct fun *fun, int dalign, int salign, int len)
 		src[i] = '?';
 		want[i] = dst[i] = '*';
 	}
-	for (i = 0; i < len-1; i++)
+	for (i = 0; i < len; i++)
 		s[i] = w[i] = 'a' + i%23;
 	s[i] = w[i] = '\0';
 

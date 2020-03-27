@@ -1,10 +1,11 @@
 /*
- * memcpy test.
+ * stpcpy test.
  *
- * Copyright (c) 2019, Arm Limited.
+ * Copyright (c) 2019-2020, Arm Limited.
  * SPDX-License-Identifier: MIT
  */
 
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,17 +15,15 @@
 static const struct fun
 {
 	const char *name;
-	void *(*fun)(void *, const void *, size_t);
+	char *(*fun)(char *dest, const char *src);
 } funtab[] = {
 #define F(x) {#x, x},
-F(memcpy)
+F(stpcpy)
 #if __aarch64__
-F(__memcpy_aarch64)
-# if __ARM_NEON
-F(__memcpy_aarch64_simd)
+F(__stpcpy_aarch64)
+# if __ARM_FEATURE_SVE
+F(__stpcpy_aarch64_sve)
 # endif
-#elif __arm__
-F(__memcpy_arm)
 #endif
 #undef F
 	{0, 0}
@@ -35,9 +34,9 @@ static int test_status;
 
 #define A 32
 #define LEN 250000
-static unsigned char dbuf[LEN+2*A];
-static unsigned char sbuf[LEN+2*A];
-static unsigned char wbuf[LEN+2*A];
+static char dbuf[LEN+2*A];
+static char sbuf[LEN+2*A];
+static char wbuf[LEN+2*A];
 
 static void *alignup(void *p)
 {
@@ -46,12 +45,12 @@ static void *alignup(void *p)
 
 static void test(const struct fun *fun, int dalign, int salign, int len)
 {
-	unsigned char *src = alignup(sbuf);
-	unsigned char *dst = alignup(dbuf);
-	unsigned char *want = wbuf;
-	unsigned char *s = src + salign;
-	unsigned char *d = dst + dalign;
-	unsigned char *w = want + dalign;
+	char *src = alignup(sbuf);
+	char *dst = alignup(dbuf);
+	char *want = wbuf;
+	char *s = src + salign;
+	char *d = dst + dalign;
+	char *w = want + dalign;
 	void *p;
 	int i;
 
@@ -63,9 +62,10 @@ static void test(const struct fun *fun, int dalign, int salign, int len)
 	}
 	for (i = 0; i < len; i++)
 		s[i] = w[i] = 'a' + i%23;
+	s[i] = w[i] = '\0';
 
-	p = fun->fun(d, s, len);
-	if (p != d)
+	p = fun->fun(d, s);
+	if (p != d + len)
 		ERR("%s(%p,..) returned %p\n", fun->name, d, p);
 	for (i = 0; i < len+A; i++) {
 		if (dst[i] != want[i]) {
