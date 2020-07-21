@@ -141,3 +141,4 @@ L(zero_length):
 	ret
 
 END (__memchr_aarch64)
+

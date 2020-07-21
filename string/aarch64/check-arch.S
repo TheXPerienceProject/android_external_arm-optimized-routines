@@ -8,3 +8,6 @@
 #if !__aarch64__
 # error ARCH setting does not match the compiler.
 #endif
+
+/* Include for GNU property notes.  */
+#include "../asmdefs.h"

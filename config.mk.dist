@@ -9,6 +9,9 @@ SUBS = math string networking
 # Target architecture: aarch64, arm or x86_64
 ARCH = aarch64
 
+# Use for cross compilation with gcc.
+#CROSS_COMPILE = aarch64-none-linux-gnu-
+
 # Compiler for the target
 CC = $(CROSS_COMPILE)gcc
 CFLAGS = -std=c99 -pipe -O3
@@ -27,8 +30,8 @@ CFLAGS += -g
 # Optimize the shared libraries on aarch64 assuming they fit in 1M.
 #CFLAGS_SHARED = -fPIC -mcmodel=tiny
 
-# Use for cross compilation with gcc.
-#CROSS_COMPILE = aarch64-none-linux-gnu-
+# Enable MTE support.
+#CFLAGS += -march=armv8.5-a+memtag -DWANT_MTE_TEST=1
 
 # Use with cross testing.
 #EMULATOR = qemu-aarch64-static
@@ -59,6 +62,9 @@ math-cflags += -ffp-contract=fast -fno-math-errno
 # Disable fenv checks
 #math-ulpflags = -q -f
 #math-testflags = -nostatus
+
+# Remove GNU Property Notes from asm files.
+#string-cflags += -DWANT_GNU_PROPERTY=0
 
 # Enable assertion checks.
 #networking-cflags += -DWANT_ASSERT

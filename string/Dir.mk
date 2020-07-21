@@ -22,11 +22,12 @@ string-libs := \
 	build/lib/libstringlib.so \
 	build/lib/libstringlib.a \
 
-string-tools := \
+string-tests := \
 	build/bin/test/memcpy \
 	build/bin/test/memmove \
 	build/bin/test/memset \
 	build/bin/test/memchr \
+	build/bin/test/memrchr \
 	build/bin/test/memcmp \
 	build/bin/test/strcpy \
 	build/bin/test/stpcpy \
@@ -38,7 +39,9 @@ string-tools := \
 	build/bin/test/strnlen \
 	build/bin/test/strncmp
 
-string-benches := build/bin/bench/memcpy
+string-benches := \
+	build/bin/bench/memcpy \
+	build/bin/bench/strlen
 
 string-lib-objs := $(patsubst $(S)/%,$(B)/%.o,$(basename $(string-lib-srcs)))
 string-test-objs := $(patsubst $(S)/%,$(B)/%.o,$(basename $(string-test-srcs)))
@@ -53,14 +56,16 @@ string-objs := \
 string-files := \
 	$(string-objs) \
 	$(string-libs) \
-	$(string-tools) \
+	$(string-tests) \
 	$(string-benches) \
 	$(string-includes) \
 
-all-string: $(string-libs) $(string-tools) $(string-benches) $(string-includes)
+all-string: $(string-libs) $(string-tests) $(string-benches) $(string-includes)
 
 $(string-objs): $(string-includes)
 $(string-objs): CFLAGS_ALL += $(string-cflags)
+
+$(string-test-objs): CFLAGS_ALL += -D_GNU_SOURCE
 
 build/lib/libstringlib.so: $(string-lib-objs:%.o=%.os)
 	$(CC) $(CFLAGS_ALL) $(LDFLAGS) -shared -o $@ $^
@@ -82,23 +87,17 @@ build/include/%.h: $(S)/include/%.h
 build/bin/%.sh: $(S)/test/%.sh
 	cp $< $@
 
-check-string: $(string-tools)
-	$(EMULATOR) build/bin/test/memcpy
-	$(EMULATOR) build/bin/test/memmove
-	$(EMULATOR) build/bin/test/memset
-	$(EMULATOR) build/bin/test/memchr
-	$(EMULATOR) build/bin/test/memcmp
-	$(EMULATOR) build/bin/test/strcpy
-	$(EMULATOR) build/bin/test/stpcpy
-	$(EMULATOR) build/bin/test/strcmp
-	$(EMULATOR) build/bin/test/strchr
-	$(EMULATOR) build/bin/test/strrchr
-	$(EMULATOR) build/bin/test/strchrnul
-	$(EMULATOR) build/bin/test/strlen
-	$(EMULATOR) build/bin/test/strnlen
-	$(EMULATOR) build/bin/test/strncmp
+string-tests-out = $(string-tests:build/bin/test/%=build/string/test/%.out)
+
+build/string/test/%.out: build/bin/test/%
+	$(EMULATOR) $^ | tee $@.tmp
+	mv $@.tmp $@
+
+check-string: $(string-tests-out)
+	! grep FAIL $^
 
 bench-string: $(string-benches)
+	$(EMULATOR) build/bin/bench/strlen
 	$(EMULATOR) build/bin/bench/memcpy
 
 install-string: \
