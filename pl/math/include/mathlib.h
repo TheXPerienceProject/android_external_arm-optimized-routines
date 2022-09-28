@@ -15,6 +15,7 @@ float erfcf (float);
 float erff (float);
 float log10f (float);
 float log1pf (float);
+float tanf (float);
 
 double asinh (double);
 double atan2 (double, double);
@@ -30,6 +31,7 @@ float __s_erff (float);
 float __s_log10f (float);
 float __s_log1pf (float);
 float __s_log2f (float);
+float __s_tanf (float);
 
 double __s_atan (double);
 double __s_atan2 (double, double);
@@ -64,6 +66,7 @@ __f64x2_t __v_log10 (__f64x2_t);
 __f32x4_t __v_log1pf (__f32x4_t);
 __f32x4_t __v_log2f (__f32x4_t);
 __f64x2_t __v_log2 (__f64x2_t);
+__f32x4_t __v_tanf (__f32x4_t);
 
 #if __GNUC__ >= 9 || __clang_major__ >= 8
 #define __vpcs __attribute__((__aarch64_vector_pcs__))
@@ -83,6 +86,7 @@ __vpcs __f64x2_t __vn_log10 (__f64x2_t);
 __vpcs __f32x4_t __vn_log1pf (__f32x4_t);
 __vpcs __f32x4_t __vn_log2f (__f32x4_t);
 __vpcs __f64x2_t __vn_log2 (__f64x2_t);
+__vpcs __f32x4_t __vn_tanf (__f32x4_t);
 
 /* Vector functions following the vector PCS using ABI names.  */
 __vpcs __f32x4_t _ZGVnN4v_asinhf (__f32x4_t);
@@ -99,6 +103,7 @@ __vpcs __f64x2_t _ZGVnN2v_log10 (__f64x2_t);
 __vpcs __f32x4_t _ZGVnN4v_log1pf (__f32x4_t);
 __vpcs __f32x4_t _ZGVnN4v_log2f (__f32x4_t);
 __vpcs __f64x2_t _ZGVnN2v_log2 (__f64x2_t);
+__vpcs __f32x4_t _ZGVnN4v_tanf (__f32x4_t);
 
 #endif
 
@@ -110,6 +115,7 @@ svfloat64_t __sv_atan_x (svfloat64_t, svbool_t);
 svfloat64_t __sv_atan2_x (svfloat64_t, svfloat64_t, svbool_t);
 svfloat32_t __sv_cosf_x (svfloat32_t, svbool_t);
 svfloat64_t __sv_cos_x (svfloat64_t, svbool_t);
+svfloat32_t __sv_expf_x (svfloat32_t, svbool_t);
 svfloat32_t __sv_logf_x (svfloat32_t, svbool_t);
 svfloat64_t __sv_log_x (svfloat64_t, svbool_t);
 svfloat32_t __sv_log10f_x (svfloat32_t, svbool_t);
@@ -123,6 +129,7 @@ svfloat64_t _ZGVsMxv_atan (svfloat64_t, svbool_t);
 svfloat64_t _ZGVsMxvv_atan2 (svfloat64_t, svfloat64_t, svbool_t);
 svfloat32_t _ZGVsMxv_cosf (svfloat32_t, svbool_t);
 svfloat64_t _ZGVsMxv_cos (svfloat64_t, svbool_t);
+svfloat32_t _ZGVsMxv_expf (svfloat32_t, svbool_t);
 svfloat32_t _ZGVsMxv_logf (svfloat32_t, svbool_t);
 svfloat64_t _ZGVsMxv_log (svfloat64_t, svbool_t);
 svfloat32_t _ZGVsMxv_log10f (svfloat32_t, svbool_t);

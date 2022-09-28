@@ -15,6 +15,7 @@ F (log10f, 0.01, 11.1)
 F (log1pf, -0.9, 10.0)
 F (log2f, 0.01, 11.1)
 F (sinf, -3.1, 3.1)
+F (tanf, -3.1, 3.1)
 
 D (asinh, -10.0, 10.0)
 D (atan, -10.0, 10.0)
@@ -42,6 +43,7 @@ D (__s_log10, 0.01, 11.1)
 F (__s_log1pf, -0.9, 10.0)
 F (__s_log2f, 0.01, 11.1)
 D (__s_log2, 0.01, 11.1)
+F (__s_tanf, -3.1, 3.1)
 #if __aarch64__
 VF (__v_asinhf, -10.0, 10.0)
 VF (__v_atanf, -10.0, 10.0)
@@ -57,6 +59,7 @@ VF (__v_log10f, 0.01, 11.1)
 VF (__v_log1pf, -0.9, 10.0)
 VF (__v_log2f, 0.01, 11.1)
 VD (__v_log2, 0.01, 11.1)
+VF (__v_tanf, -3.1, 3.1)
 #ifdef __vpcs
 VNF (__vn_asinhf, -10.0, 10.0)
 VNF (_ZGVnN4v_asinhf, -10.0, 10.0)
@@ -99,6 +102,9 @@ VNF (_ZGVnN4v_log2f, 0.01, 11.1)
 
 VND (__vn_log2, 0.01, 11.1)
 VND (_ZGVnN2v_log2, 0.01, 11.1)
+
+VNF (__vn_tanf, -3.1, 3.1)
+VNF (_ZGVnN4v_tanf, -3.1, 3.1)
 #endif
 #endif
 #if WANT_SVE_MATH
@@ -111,6 +117,9 @@ SVD (_ZGVsMxv_atan, -3.1, 3.1)
 {"_ZGVsMxvv_atan2f", 'f', 'n', -10.0, 10.0, {.svf = _Z_sv_atan2f_wrap}},
 {"__sv_atan2", 'd', 'n', -10.0, 10.0, {.svd = __sv_atan2_wrap}},
 {"_ZGVsM2vv_atan2", 'd', 'n', -10.0, 10.0, {.svd = _Z_sv_atan2_wrap}},
+
+SVF (__sv_expf_x, -9.9, 9.9)
+SVF (_ZGVsMxv_expf, -9.9, 9.9)
 
 SVF (__sv_cosf_x, -3.1, 3.1)
 SVF (_ZGVsMxv_cosf, -3.1, 3.1)

@@ -123,6 +123,22 @@ t log1pf -0x1p-23   -0.001  50000
 t log1pf   -0.001     -1.0  50000
 t log1pf     -1.0      inf   5000
 
+L=2.80
+Ldir=
+t tanf  0      0xffff0000 10000
+t tanf  0x1p-127  0x1p-14 50000
+t tanf -0x1p-127 -0x1p-14 50000
+t tanf  0x1p-14   0.7     50000
+t tanf -0x1p-14  -0.7     50000
+t tanf  0.7       1.5     50000
+t tanf -0.7      -1.5     50000
+t tanf  1.5       0x1p17  50000
+t tanf -1.5      -0x1p17  50000
+t tanf  0x1p17    0x1p54  50000
+t tanf -0x1p17   -0x1p54  50000
+t tanf  0x1p54    inf     50000
+t tanf -0x1p54   -inf     50000
+
 done
 
 # vector functions
@@ -262,6 +278,17 @@ range_log2='
       100       inf  50000
 '
 
+range_tanf='
+     -0.0  -0x1p126  100
+ 0x1p-149  0x1p-126  4000
+ 0x1p-126   0x1p-23  50000
+  0x1p-23       0.7  50000
+      0.7       1.5  50000
+      1.5       100  50000
+      100    0x1p17  50000
+   0x1p17       inf  50000
+'
+
 range_sve_cosf='
  0    0xffff0000    10000
  0x1p-4    0x1p4    500000
@@ -350,6 +377,17 @@ range_sve_log='
       100       inf  50000
 '
 
+range_sve_expf='
+  0        0x1p-23   40000
+  0x1p-23  1         50000
+  1        0x1p23    50000
+  0x1p23   inf       50000
+  -0       -0x1p-23  40000
+  -0x1p-23 -1        50000
+  -1       -0x1p23   50000
+  -0x1p23  -inf      50000
+'
+
 # error limits
 L_erfc=3.11
 L_erfcf=0.26
@@ -366,6 +404,7 @@ L_log1pf=1.53
 L_asinhf=2.17
 L_log2f=2.10
 L_log2=2.09
+L_tanf=2.7
 
 L_sve_cosf=1.57
 L_sve_cos=1.61
@@ -380,6 +419,7 @@ L_sve_log10=1.97
 L_sve_log10f=2.82
 L_sve_logf=2.85
 L_sve_log=1.68
+L_sve_expf=1.46
 
 while read G F R
 do
@@ -455,6 +495,10 @@ log2f  __s_log2f       $runs
 log2f  __v_log2f       $runv
 log2f  __vn_log2f      $runvn
 log2f  _ZGVnN4v_log2f  $runvn
+tanf  __s_tanf         $runs
+tanf  __v_tanf         $runv
+tanf  __vn_tanf        $runvn
+tanf  _ZGVnN4v_tanf    $runvn
 
 if [ $WANT_SVE_MATH -eq 1 ]; then
 sve_cosf     __sv_cosf         $runsv
@@ -469,6 +513,8 @@ sve_log10f   __sv_log10f       $runsv
 sve_log10f   _ZGVsMxv_log10f   $runsv
 sve_logf     __sv_logf         $runsv
 sve_logf     _ZGVsMxv_logf     $runsv
+sve_expf     __sv_expf         $runsv
+sve_expf     _ZGVsMxv_expf     $runsv
 
 sve_cos    __sv_cos        $runsv
 sve_cos    _ZGVsMxv_cos    $runsv
