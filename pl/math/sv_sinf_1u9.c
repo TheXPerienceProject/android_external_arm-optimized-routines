@@ -9,23 +9,31 @@
 #include "pl_sig.h"
 #include "pl_test.h"
 
-#if SV_SUPPORTED
+static const struct data
+{
+  float poly[4];
+  /* Pi-related values to be loaded as one quad-word and used with
+     svmla_lane_f32.  */
+  float negpi1, negpi2, negpi3, invpi;
+  float shift;
+} data = {
+  .poly = {
+    /* Non-zero coefficients from the degree 9 Taylor series expansion of
+       sin.  */
+    -0x1.555548p-3f, 0x1.110df4p-7f, -0x1.9f42eap-13f, 0x1.5b2e76p-19f
+  },
+  .negpi1 = -0x1.921fb6p+1f,
+  .negpi2 = 0x1.777a5cp-24f,
+  .negpi3 = 0x1.ee59dap-49f,
+  .invpi = 0x1.45f306p-2f,
+  .shift = 0x1.8p+23f
+};
 
-#define A3 (sv_f32 (__sv_sinf_data.coeffs[3]))
-#define A5 (sv_f32 (__sv_sinf_data.coeffs[2]))
-#define A7 (sv_f32 (__sv_sinf_data.coeffs[1]))
-#define A9 (sv_f32 (__sv_sinf_data.coeffs[0]))
+#define RangeVal 0x49800000 /* asuint32 (0x1p20f).  */
+#define C(i) sv_f32 (d->poly[i])
 
-#define NegPi1 (sv_f32 (-0x1.921fb6p+1f))
-#define NegPi2 (sv_f32 (0x1.777a5cp-24f))
-#define NegPi3 (sv_f32 (0x1.ee59dap-49f))
-#define RangeVal (sv_f32 (0x1p20f))
-#define InvPi (sv_f32 (0x1.45f306p-2f))
-#define Shift (sv_f32 (0x1.8p+23f))
-#define AbsMask (0x7fffffff)
-
-static NOINLINE svfloat32_t
-__sv_sinf_specialcase (svfloat32_t x, svfloat32_t y, svbool_t cmp)
+static svfloat32_t NOINLINE
+special_case (svfloat32_t x, svfloat32_t y, svbool_t cmp)
 {
   return sv_call_f32 (sinf, x, y, cmp);
 }
@@ -37,42 +45,43 @@ __sv_sinf_specialcase (svfloat32_t x, svfloat32_t y, svbool_t cmp)
    SV_NAME_F1 (sin)(0x1.9247a4p+0) got 0x1.fffff6p-1 want 0x1.fffffap-1.  */
 svfloat32_t SV_NAME_F1 (sin) (svfloat32_t x, const svbool_t pg)
 {
-  svfloat32_t n, r, r2, y;
-  svuint32_t sign, odd;
-  svbool_t cmp;
+  const struct data *d = ptr_barrier (&data);
 
-  r = svreinterpret_f32_u32 (
-    svand_n_u32_x (pg, svreinterpret_u32_f32 (x), AbsMask));
-  sign = svand_n_u32_x (pg, svreinterpret_u32_f32 (x), ~AbsMask);
-  cmp = svcmpge_u32 (pg, svreinterpret_u32_f32 (r),
-		     svreinterpret_u32_f32 (RangeVal));
+  svfloat32_t ax = svabs_f32_x (pg, x);
+  svuint32_t sign = sveor_u32_x (pg, svreinterpret_u32_f32 (x),
+				 svreinterpret_u32_f32 (ax));
+  svbool_t cmp = svcmpge_n_u32 (pg, svreinterpret_u32_f32 (ax), RangeVal);
+
+  /* pi_vals are a quad-word of helper values - the first 3 elements contain
+     -pi in extended precision, the last contains 1 / pi.  */
+  svfloat32_t pi_vals = svld1rq_f32 (svptrue_b32 (), &d->negpi1);
 
   /* n = rint(|x|/pi).  */
-  n = svmla_f32_x (pg, Shift, r, InvPi);
-  odd = svlsl_n_u32_x (pg, svreinterpret_u32_f32 (n), 31);
-  n = svsub_f32_x (pg, n, Shift);
+  svfloat32_t n = svmla_lane_f32 (sv_f32 (d->shift), ax, pi_vals, 3);
+  svuint32_t odd = svlsl_n_u32_x (pg, svreinterpret_u32_f32 (n), 31);
+  n = svsub_n_f32_x (pg, n, d->shift);
 
   /* r = |x| - n*pi  (range reduction into -pi/2 .. pi/2).  */
-  r = svmla_f32_x (pg, r, n, NegPi1);
-  r = svmla_f32_x (pg, r, n, NegPi2);
-  r = svmla_f32_x (pg, r, n, NegPi3);
+  svfloat32_t r;
+  r = svmla_lane_f32 (ax, n, pi_vals, 0);
+  r = svmla_lane_f32 (r, n, pi_vals, 1);
+  r = svmla_lane_f32 (r, n, pi_vals, 2);
 
   /* sin(r) approx using a degree 9 polynomial from the Taylor series
      expansion. Note that only the odd terms of this are non-zero.  */
-  r2 = svmul_f32_x (pg, r, r);
-  y = svmla_f32_x (pg, A7, r2, A9);
-  y = svmla_f32_x (pg, A5, r2, y);
-  y = svmla_f32_x (pg, A3, r2, y);
+  svfloat32_t r2 = svmul_f32_x (pg, r, r);
+  svfloat32_t y;
+  y = svmla_f32_x (pg, C (2), r2, C (3));
+  y = svmla_f32_x (pg, C (1), r2, y);
+  y = svmla_f32_x (pg, C (0), r2, y);
   y = svmla_f32_x (pg, r, r, svmul_f32_x (pg, y, r2));
 
   /* sign = y^sign^odd.  */
-  y = svreinterpret_f32_u32 (
-    sveor_u32_x (pg, svreinterpret_u32_f32 (y), sveor_u32_x (pg, sign, odd)));
+  y = svreinterpret_f32_u32 (sveor_u32_x (pg, svreinterpret_u32_f32 (y),
+					  sveor_u32_x (pg, sign, odd)));
 
-  /* No need to pass pg to specialcase here since cmp is a strict subset,
-     guaranteed by the cmpge above.  */
   if (unlikely (svptest_any (pg, cmp)))
-    return __sv_sinf_specialcase (x, y, cmp);
+    return special_case (x, y, cmp);
   return y;
 }
 
@@ -80,4 +89,3 @@ PL_SIG (SV, F, 1, sin, -3.1, 3.1)
 PL_TEST_ULP (SV_NAME_F1 (sin), 1.40)
 PL_TEST_INTERVAL (SV_NAME_F1 (sin), 0, 0xffff0000, 10000)
 PL_TEST_INTERVAL (SV_NAME_F1 (sin), 0x1p-4, 0x1p4, 500000)
-#endif

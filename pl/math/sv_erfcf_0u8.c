@@ -9,8 +9,6 @@
 #include "pl_sig.h"
 #include "pl_test.h"
 
-#if SV_SUPPORTED
-
 #define P __erfcf_poly_data.poly_T
 
 svfloat64_t SV_NAME_D1 (exp) (svfloat64_t, svbool_t);
@@ -22,7 +20,7 @@ special_case (svfloat32_t x, svfloat32_t y, svbool_t special)
 }
 
 static inline svfloat64_t
-estrin_lvl1 (svbool_t pg, svfloat64_t x, svuint64_t idx, u64_t i, u64_t j)
+estrin_lvl1 (svbool_t pg, svfloat64_t x, svuint64_t idx, uint64_t i, uint64_t j)
 {
   svfloat64_t a = svtbl_f64 (svld1_f64 (pg, &P[i][0]), idx);
   svfloat64_t b = svtbl_f64 (svld1_f64 (pg, &P[j][0]), idx);
@@ -187,5 +185,3 @@ PL_TEST_INTERVAL (SV_NAME_F1 (erfc), 0x1p-26, 0x1p5, 40000)
 PL_TEST_INTERVAL (SV_NAME_F1 (erfc), -0x1p-26, -0x1p3, 40000)
 PL_TEST_INTERVAL (SV_NAME_F1 (erfc), 0, inf, 40000)
 PL_TEST_INTERVAL (SV_NAME_F1 (erfc), -0, -inf, 40000)
-
-#endif // SV_SUPPORTED

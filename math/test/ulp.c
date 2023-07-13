@@ -23,11 +23,6 @@
 # include <mpfr.h>
 #endif
 
-#ifndef WANT_VMATH
-/* Enable the build of vector math code.  */
-# define WANT_VMATH 1
-#endif
-
 static inline uint64_t
 asuint64 (double f)
 {
@@ -220,7 +215,7 @@ struct conf
 static int secondcall;
 
 /* Wrappers for vector functions.  */
-#if __aarch64__ && WANT_VMATH
+#ifdef __vpcs
 typedef __f32x4_t v_float;
 typedef __f64x2_t v_double;
 /* First element of fv and dv may be changed by -c argument.  */
@@ -358,10 +353,6 @@ static const struct fun fun[] = {
 #define ZVNF2(x) VNF2 (x) ZVF2 (x)
 #define ZVND1(x) VND1 (x) ZVD1 (x)
 #define ZVND2(x) VND2 (x) ZVD2 (x)
-#define SF1(x) F (__s_##x##f, __s_##x##f, x, mpfr_##x, 1, 1, f1, 0)
-#define SF2(x) F (__s_##x##f, __s_##x##f, x, mpfr_##x, 2, 1, f2, 0)
-#define SD1(x) F (__s_##x, __s_##x, x##l, mpfr_##x, 1, 0, d1, 0)
-#define SD2(x) F (__s_##x, __s_##x, x##l, mpfr_##x, 2, 0, d2, 0)
 /* SVE routines.  */
 #define SVF1(x) F (__sv_##x##f, sv_##x##f, x, mpfr_##x, 1, 1, f1, 0)
 #define SVF2(x) F (__sv_##x##f, sv_##x##f, x, mpfr_##x, 2, 1, f2, 0)
@@ -634,7 +625,7 @@ usage (void)
   puts ("-q: quiet.");
   puts ("-m: use mpfr even if faster method is available.");
   puts ("-f: disable fenv testing (rounding modes and exceptions).");
-#if __aarch64__ && WANT_VMATH
+#ifdef ___vpcs
   puts ("-c: neutral 'control value' to test behaviour when one lane can affect another. \n"
 	"    This should be different from tested input in other lanes, and non-special \n"
 	"    (i.e. should not trigger fenv exceptions). Default is 1.");
@@ -806,7 +797,7 @@ main (int argc, char *argv[])
 	      conf.rc = argv[0][0];
 	    }
 	  break;
-#if __aarch64__ && WANT_VMATH
+#ifdef __vpcs
 	case 'c':
 	  argc--;
 	  argv++;
@@ -839,7 +830,19 @@ main (int argc, char *argv[])
     if (strcmp (argv[0], f->name) == 0)
       break;
   if (!f->name)
-    usage ();
+    {
+#ifndef __vpcs
+      /* Ignore vector math functions if vector math is not supported.  */
+      if (strncmp (argv[0], "_ZGVnN", 6) == 0)
+	exit (0);
+#endif
+#ifndef WANT_SVE_MATH
+      if (strncmp (argv[0], "_ZGVsMxv", 8) == 0)
+	exit (0);
+#endif
+      printf ("math function %s not supported\n", argv[0]);
+      exit (1);
+    }
   if (!f->singleprec && LDBL_MANT_DIG == DBL_MANT_DIG)
     conf.mpfr = 1; /* Use mpfr if long double has no extra precision.  */
   if (!USE_MPFR && conf.mpfr)
