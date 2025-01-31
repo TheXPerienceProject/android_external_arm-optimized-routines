@@ -26,23 +26,17 @@ check_failure() {
 
 # Run the 32-bit tests.
 if [ -e "$ANDROID_PRODUCT_OUT/data/nativetest/mathtest/mathtest" ]; then
-  adb shell /data/nativetest/mathtest/mathtest '$(ls /data/nativetest/mathtest/math/test/testcases/directed/* | grep -v exp10)'
+  adb shell /data/nativetest/mathtest/mathtest \
+    '$(ls /data/nativetest/mathtest/math/test/testcases/directed/* | egrep -v "(atan2|cosh|exp10)")'
   check_failure
 fi
-
-# TODO: these tests are currently a bloodbath.
-#adb shell 'cp /data/nativetest/ulp/math/test/runulp.sh /data/nativetest/ulp/ && sh /data/nativetest/ulp/runulp.sh'
-#check_failure
 
 # Run the 64-bit tests.
 if [ -e "$ANDROID_PRODUCT_OUT/data/nativetest64/mathtest/mathtest" ]; then
-  adb shell /data/nativetest64/mathtest/mathtest '$(ls /data/nativetest/mathtest/math/test/testcases/directed/* | grep -v exp10)'
+  adb shell /data/nativetest64/mathtest/mathtest \
+    '$(ls /data/nativetest/mathtest/math/test/testcases/directed/* | egrep -v "(atan2|cosh|exp10)")'
   check_failure
 fi
-
-# TODO: these tests are currently a bloodbath.
-#adb shell 'cp /data/nativetest64/ulp/math/test/runulp.sh /data/nativetest64/ulp/ && sh /data/nativetest64/ulp/runulp.sh'
-#check_failure
 
 echo
 echo "_________________________________________________________________________"

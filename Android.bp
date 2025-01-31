@@ -144,42 +144,27 @@ cc_library_static {
         arm64: {
             srcs: [
                 "string/aarch64/memchr-mte.S",
-                "string/aarch64/memchr-sve.S",
                 "string/aarch64/memchr.S",
-                "string/aarch64/memcmp-sve.S",
                 "string/aarch64/memcmp.S",
                 "string/aarch64/memcpy-advsimd.S",
-                "string/aarch64/memcpy-sve.S",
                 "string/aarch64/memcpy.S",
                 "string/aarch64/memmove-mops.S",
                 "string/aarch64/memrchr.S",
                 "string/aarch64/memset.S",
                 "string/aarch64/memset-mops.S",
-                "string/aarch64/stpcpy-sve.S",
                 "string/aarch64/stpcpy.S",
                 "string/aarch64/strchrnul-mte.S",
-                "string/aarch64/strchrnul-sve.S",
                 "string/aarch64/strchrnul.S",
                 "string/aarch64/strchr-mte.S",
-                "string/aarch64/strchr-sve.S",
                 "string/aarch64/strchr.S",
-                "string/aarch64/strcmp-sve.S",
                 "string/aarch64/strcmp.S",
-                "string/aarch64/strcpy-sve.S",
                 "string/aarch64/strcpy.S",
                 "string/aarch64/strlen-mte.S",
-                "string/aarch64/strlen-sve.S",
                 "string/aarch64/strlen.S",
-                "string/aarch64/strncmp-sve.S",
                 "string/aarch64/strncmp.S",
-                "string/aarch64/strnlen-sve.S",
                 "string/aarch64/strnlen.S",
                 "string/aarch64/strrchr-mte.S",
-                "string/aarch64/strrchr-sve.S",
                 "string/aarch64/strrchr.S",
-            ],
-            asflags: [
-                "-march=armv8-a+sve",
             ],
         },
     },
@@ -253,18 +238,6 @@ cc_test {
     },
 }
 
-cc_test {
-    name: "ulp",
-    defaults: ["arm-optimized-routines-defaults"],
-    gtest: false,
-
-    // https://github.com/ARM-software/optimized-routines/issues/53
-    local_include_dirs: ["math/"],
-
-    srcs: ["math/test/ulp.c"],
-    data: ["math/test/runulp.sh"],
-}
-
 sh_test {
     name: "arm-optimized-routines-tests",
     src: "run-arm-optimized-routines-tests-on-android.sh",
@@ -275,6 +248,5 @@ sh_test {
     require_root: true,
     target_required: [
         "mathtest",
-        "ulp",
     ],
 }
