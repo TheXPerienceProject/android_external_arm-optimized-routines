@@ -1,6 +1,6 @@
 # Makefile - requires GNU make
 #
-# Copyright (c) 2018-2024, Arm Limited.
+# Copyright (c) 2018-2025, Arm Limited.
 # SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
 
 srcdir = .
@@ -10,8 +10,7 @@ libdir = $(prefix)/lib
 includedir = $(prefix)/include
 
 # Configure these in config.mk, do not make changes in this file.
-SUBS = math string networking
-PLSUBS = math
+SUBS = math string networking fp
 HOST_CC = cc
 HOST_CFLAGS = -std=c99 -O2
 HOST_LDFLAGS =
@@ -21,12 +20,12 @@ CPPFLAGS =
 CFLAGS = -std=c99 -O2
 CFLAGS_SHARED = -fPIC
 CFLAGS_ALL = -Ibuild/include $(CPPFLAGS) $(CFLAGS)
-CFLAGS_PL = -Ibuild/pl/include $(CPPFLAGS) $(CFLAGS) -DPL
 LDFLAGS =
 LDLIBS =
 AR = $(CROSS_COMPILE)ar
 RANLIB = $(CROSS_COMPILE)ranlib
 INSTALL = install
+FP_SUBDIR = none
 # Detect OS.
 # Assume Unix environment: Linux, Darwin, or Msys.
 OS := $(shell uname -s)
@@ -64,7 +63,6 @@ $(DIRS):
 	mkdir -p $@
 
 $(filter %.os,$(ALL_FILES)): CFLAGS_ALL += $(CFLAGS_SHARED)
-$(filter %.os,$(ALL_FILES)): CFLAGS_PL += $(CFLAGS_SHARED)
 
 build/%.o: $(srcdir)/%.S
 	$(CC) $(CFLAGS_ALL) -c -o $@ $<
