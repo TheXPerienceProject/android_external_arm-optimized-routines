@@ -82,6 +82,21 @@ In particular, the default semantics are:
    unchanged to the output. Again, the first input takes priority if
    both inputs are quiet NaNs.
 
+ - When converting a floating-point number to an integer, out-of-range
+   inputs return the maximum or minimum integer in the output type as
+   appropriate (taking account of signedness of the integer type). NaN
+   inputs return 0.
+
+ - When converting a NaN between single and double precision, the
+   NaN's sign bit is preserved, and so are the bits of the NaN
+   mantissa from the topmost bit downward. Converting to a narrower
+   format, low-order mantissa bits of an input NaN are discarded;
+   converting to a wider format, the output low-order bits are all 0.
+
+The first two of these rules are standard in IEEE 754. The remaining
+four rules are left unspecified by IEEE 754, and these are Arm's
+particular implementation choices.
+
 ---
 
 By adhering to these guidelines, you will help maintain the quality and
