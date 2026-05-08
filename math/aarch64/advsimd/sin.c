@@ -1,7 +1,7 @@
 /*
  * Double-precision vector sin function.
  *
- * Copyright (c) 2019-2024, Arm Limited.
+ * Copyright (c) 2019-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
@@ -9,97 +9,85 @@
 #include "test_sig.h"
 #include "mathlib.h"
 #include "v_math.h"
+#include "v_trig_fallback.h"
 
 static const struct data
 {
-  float64x2_t poly[7];
-  float64x2_t range_val, inv_pi, pi_1, pi_2, pi_3;
+  double c1, c3, c5, c6;
+  double inv_pi, pi_1, pi_2, pi_3;
+  float64x2_t c0, c2, c4;
+  float64x2_t range_val;
 } data = {
-  .poly = { V2 (-0x1.555555555547bp-3), V2 (0x1.1111111108a4dp-7),
-	    V2 (-0x1.a01a019936f27p-13), V2 (0x1.71de37a97d93ep-19),
-	    V2 (-0x1.ae633919987c6p-26), V2 (0x1.60e277ae07cecp-33),
-	    V2 (-0x1.9e9540300a1p-41) },
-
-  .range_val = V2 (0x1p23),
-  .inv_pi = V2 (0x1.45f306dc9c883p-2),
-  .pi_1 = V2 (0x1.921fb54442d18p+1),
-  .pi_2 = V2 (0x1.1a62633145c06p-53),
-  .pi_3 = V2 (0x1.c1cd129024e09p-106),
+  /* Worst-case error is 3.3 ulp in [-pi/2, pi/2].  */
+  .c0 = V2 (-0x1.555555555547bp-3),  .c1 = 0x1.1111111108a4dp-7,
+  .c2 = V2 (-0x1.a01a019936f27p-13), .c3 = 0x1.71de37a97d93ep-19,
+  .c4 = V2 (-0x1.ae633919987c6p-26), .c5 = 0x1.60e277ae07cecp-33,
+  .c6 = -0x1.9e9540300a1p-41,	     .inv_pi = 0x1.45f306dc9c883p-2,
+  .pi_1 = 0x1.921fb54442d18p+1,	     .pi_2 = 0x1.1a62633145c06p-53,
+  .pi_3 = 0x1.c1cd129024e09p-106,    .range_val = V2 (0x1p23)
 };
-
-#if WANT_SIMD_EXCEPT
-/* asuint64(0x1p-253)), below which multiply by inv_pi underflows.  */
-# define TinyBound v_u64 (0x3020000000000000)
-/* RangeVal - TinyBound.  */
-# define Thresh v_u64 (0x1160000000000000)
-#endif
-
-#define C(i) d->poly[i]
 
 static float64x2_t VPCS_ATTR NOINLINE
 special_case (float64x2_t x, float64x2_t y, uint64x2_t odd, uint64x2_t cmp)
 {
   y = vreinterpretq_f64_u64 (veorq_u64 (vreinterpretq_u64_f64 (y), odd));
-  return v_call_f64 (sin, x, y, cmp);
+  return v_call_vpcs_f64 (v_sin_fallback, x, y, cmp);
 }
 
 /* Vector (AdvSIMD) sin approximation.
    Maximum observed error in [-pi/2, pi/2], where argument is not reduced,
-   is 2.87 ULP:
+   is 2.37 + 0.5 ULP:
    _ZGVnN2v_sin (0x1.921d5c6a07142p+0) got 0x1.fffffffa7dc02p-1
 				      want 0x1.fffffffa7dc05p-1
    Maximum observed error in the entire non-special domain ([-2^23, 2^23])
-   is 3.22 ULP:
+   is 2.72 + 0.5 ULP:
    _ZGVnN2v_sin (0x1.5702447b6f17bp+22) got 0x1.ffdcd125c84fbp-3
-				       want 0x1.ffdcd125c84f8p-3.  */
+				       want 0x1.ffdcd125c84f8p-3
+   Maximum observed error in the special domain (|x| > 2^23) is 2.71 + 0.5ULP
+   _ZGVnN2v_sin (0x1.ce2af8b309a2ep+939) got -0x1.ffdd7a49803e6p-3
+					want -0x1.ffdd7a49803e3p-3.  */
 float64x2_t VPCS_ATTR V_NAME_D1 (sin) (float64x2_t x)
 {
   const struct data *d = ptr_barrier (&data);
-  float64x2_t n, r, r2, r3, r4, y, t1, t2, t3;
-  uint64x2_t odd, cmp;
+  uint64x2_t cmp = vcageq_f64 (x, d->range_val);
 
-#if WANT_SIMD_EXCEPT
-  /* Detect |x| <= TinyBound or |x| >= RangeVal. If fenv exceptions are to be
-     triggered correctly, set any special lanes to 1 (which is neutral w.r.t.
-     fenv). These lanes will be fixed by special-case handler later.  */
-  uint64x2_t ir = vreinterpretq_u64_f64 (vabsq_f64 (x));
-  cmp = vcgeq_u64 (vsubq_u64 (ir, TinyBound), Thresh);
-  r = vreinterpretq_f64_u64 (vbicq_u64 (vreinterpretq_u64_f64 (x), cmp));
-#else
-  r = x;
-  cmp = vcageq_f64 (x, d->range_val);
-#endif
+  float64x2_t invpi_pi_1 = vld1q_f64 (&d->inv_pi);
+  float64x2_t pi_2_3 = vld1q_f64 (&d->pi_2);
 
   /* n = rint(|x|/pi).  */
-  n = vrndaq_f64 (vmulq_f64 (r, d->inv_pi));
-  odd = vshlq_n_u64 (vreinterpretq_u64_s64 (vcvtq_s64_f64 (n)), 63);
+  float64x2_t n = vrndaq_f64 (vmulq_laneq_f64 (x, invpi_pi_1, 0));
+  uint64x2_t odd = vshlq_n_u64 (vreinterpretq_u64_s64 (vcvtq_s64_f64 (n)), 63);
 
   /* r = |x| - n*pi  (range reduction into -pi/2 .. pi/2).  */
-  r = vfmsq_f64 (r, d->pi_1, n);
-  r = vfmsq_f64 (r, d->pi_2, n);
-  r = vfmsq_f64 (r, d->pi_3, n);
+  float64x2_t r = x;
+  r = vfmsq_laneq_f64 (r, n, invpi_pi_1, 1);
+  r = vfmsq_laneq_f64 (r, n, pi_2_3, 0);
+  r = vfmsq_laneq_f64 (r, n, pi_2_3, 1);
 
   /* sin(r) poly approx.  */
-  r2 = vmulq_f64 (r, r);
-  r3 = vmulq_f64 (r2, r);
-  r4 = vmulq_f64 (r2, r2);
+  float64x2_t r2 = vmulq_f64 (r, r);
+  float64x2_t r3 = vmulq_f64 (r2, r);
+  float64x2_t r4 = vmulq_f64 (r2, r2);
 
-  t1 = vfmaq_f64 (C (4), C (5), r2);
-  t2 = vfmaq_f64 (C (2), C (3), r2);
-  t3 = vfmaq_f64 (C (0), C (1), r2);
+  float64x2_t c13 = vld1q_f64 (&d->c1);
+  float64x2_t c56 = vld1q_f64 (&d->c5);
 
-  y = vfmaq_f64 (t1, C (6), r4);
-  y = vfmaq_f64 (t2, y, r4);
-  y = vfmaq_f64 (t3, y, r4);
-  y = vfmaq_f64 (r, y, r3);
+  float64x2_t p01 = vfmaq_laneq_f64 (d->c0, r2, c13, 0);
+  float64x2_t p23 = vfmaq_laneq_f64 (d->c2, r2, c13, 1);
+  float64x2_t p45 = vfmaq_laneq_f64 (d->c4, r2, c56, 0);
+  float64x2_t p46 = vfmaq_laneq_f64 (p45, r4, c56, 1);
+
+  float64x2_t p26 = vfmaq_f64 (p23, r4, p46);
+  float64x2_t p06 = vfmaq_f64 (p01, r4, p26);
+  float64x2_t y = vfmaq_f64 (r, r3, p06);
 
   if (unlikely (v_any_u64 (cmp)))
     return special_case (x, y, odd, cmp);
+
   return vreinterpretq_f64_u64 (veorq_u64 (vreinterpretq_u64_f64 (y), odd));
 }
 
 TEST_SIG (V, D, 1, sin, -3.1, 3.1)
-TEST_ULP (V_NAME_D1 (sin), 3.0)
-TEST_DISABLE_FENV_IF_NOT (V_NAME_D1 (sin), WANT_SIMD_EXCEPT)
+TEST_ULP (V_NAME_D1 (sin), 2.73)
 TEST_SYM_INTERVAL (V_NAME_D1 (sin), 0, 0x1p23, 500000)
 TEST_SYM_INTERVAL (V_NAME_D1 (sin), 0x1p23, inf, 10000)

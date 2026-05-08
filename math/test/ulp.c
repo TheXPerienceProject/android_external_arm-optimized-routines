@@ -1,7 +1,7 @@
 /*
  * ULP error checking tool for math functions.
  *
- * Copyright (c) 2019-2024, Arm Limited.
+ * Copyright (c) 2019-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
@@ -29,7 +29,7 @@
 #include <string.h>
 #include "mathlib.h"
 
-#include "trigpi_references.h"
+#include "c23_references.h"
 
 /* Don't depend on mpfr by default.  */
 #ifndef USE_MPFR
@@ -603,7 +603,7 @@ usage (void)
   puts ("-q: quiet.");
   puts ("-m: use mpfr even if faster method is available.");
   puts ("-f: disable fenv exceptions testing.");
-#ifdef ___vpcs
+#if __aarch64__ && __linux__
   puts ("-c: neutral 'control value' to test behaviour when one lane can affect another. \n"
 	"    This should be different from tested input in other lanes, and non-special \n"
 	"    (i.e. should not trigger fenv exceptions). Default is 1.");
@@ -855,7 +855,8 @@ main (int argc, char *argv[])
 	exit (0);
 #endif
 #if !WANT_SVE_TESTS
-      if (strncmp (argv[0], "_ZGVsMxv", 8) == 0)
+      if (strncmp (argv[0], "_ZGVsMxv", 8) == 0
+	  || strncmp (argv[0], "arm_math_sve", 12) == 0)
 	exit (0);
 #endif
       printf ("math function %s not supported\n", argv[0]);

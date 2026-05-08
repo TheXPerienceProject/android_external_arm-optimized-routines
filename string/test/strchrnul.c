@@ -27,12 +27,16 @@ static const struct fun
   int test_mte;
 } funtab[] = {
   // clang-format off
+#if !defined (__APPLE__) && !defined (_WIN32) && !defined (__CYGWIN__)
   F(strchrnul, 0)
+#endif
 #if __aarch64__
   F(__strchrnul_aarch64, 0)
   F(__strchrnul_aarch64_mte, 1)
 # if __ARM_FEATURE_SVE
   F(__strchrnul_aarch64_sve, 1)
+# endif
+# if __ARM_FEATURE_SVE2
 # endif
 #endif
   {0, 0, 0}

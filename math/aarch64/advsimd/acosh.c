@@ -1,6 +1,6 @@
 /*
  * Double-precision vector acosh(x) function.
- * Copyright (c) 2023-2024, Arm Limited.
+ * Copyright (c) 2023-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
@@ -25,7 +25,18 @@ static float64x2_t NOINLINE VPCS_ATTR
 special_case (float64x2_t x, float64x2_t y, uint64x2_t special,
 	      const struct v_log1p_data *d)
 {
-  return v_call_f64 (acosh, x, log1p_inline (y, d), special);
+  /* Acosh is define on [1, inf). Its formula can be re-written knowing that 1
+    becomes negligible when x is a very large number. So for special numbers,
+    where x >= 2^511, acosh ~= ln(2x). But, ln(2x) = ln(2) + ln(x) and below we
+    calculate ln(x) and then add ln(2) to the result.
+
+    Right before returning we check if x is infinity or if x is lower than 1,
+    in which case we return infinity or NaN.  */
+  float64x2_t one = v_f64 (1.0);
+  float64x2_t t = log1p_inline (vbslq_f64 (special, x, y), d);
+  t = vbslq_f64 (special, vaddq_f64 (t, v_f64 (d->ln2[0])), t);
+  t = vbslq_f64 (vceqq_f64 (x, v_f64 (INFINITY)), v_f64 (INFINITY), t);
+  return vbslq_f64 (vcltq_f64 (x, one), v_f64 (NAN), t);
 }
 
 /* Vector approximation for double-precision acosh, based on log1p.
@@ -38,12 +49,6 @@ VPCS_ATTR float64x2_t V_NAME_D1 (acosh) (float64x2_t x)
   const struct data *d = ptr_barrier (&data);
   uint64x2_t special
       = vcgeq_u64 (vsubq_u64 (vreinterpretq_u64_f64 (x), d->one), d->thresh);
-  float64x2_t special_arg = x;
-
-#if WANT_SIMD_EXCEPT
-  if (unlikely (v_any_u64 (special)))
-    x = vbslq_f64 (special, vreinterpretq_f64_u64 (d->one), x);
-#endif
 
   float64x2_t xm1 = vsubq_f64 (x, v_f64 (1.0));
   float64x2_t y = vaddq_f64 (x, v_f64 (1.0));
@@ -52,13 +57,12 @@ VPCS_ATTR float64x2_t V_NAME_D1 (acosh) (float64x2_t x)
   y = vaddq_f64 (xm1, y);
 
   if (unlikely (v_any_u64 (special)))
-    return special_case (special_arg, y, special, &d->log1p_consts);
+    return special_case (x, y, special, &d->log1p_consts);
   return log1p_inline (y, &d->log1p_consts);
 }
 
 TEST_SIG (V, D, 1, acosh, 1.0, 10.0)
 TEST_ULP (V_NAME_D1 (acosh), 2.53)
-TEST_DISABLE_FENV_IF_NOT (V_NAME_D1 (acosh), WANT_SIMD_EXCEPT)
 TEST_INTERVAL (V_NAME_D1 (acosh), 1, 0x1p511, 90000)
 TEST_INTERVAL (V_NAME_D1 (acosh), 0x1p511, inf, 10000)
 TEST_INTERVAL (V_NAME_D1 (acosh), 0, 1, 1000)

@@ -1,13 +1,14 @@
 /*
  * Single-precision pow function.
  *
- * Copyright (c) 2017-2024, Arm Limited.
+ * Copyright (c) 2017-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
 #include <math.h>
 #include <stdint.h>
 #include "math_config.h"
+#include "powf_common.h"
 #include "test_defs.h"
 
 /*
@@ -17,8 +18,7 @@ EXP2F_TABLE_BITS = 5
 ULP error: 0.82 (~ 0.5 + relerr*2^24)
 relerr: 1.27 * 2^-26 (Relative error ~= 128*Ln2*relerr_log2 + relerr_exp2)
 relerr_log2: 1.83 * 2^-33 (Relative error of logx.)
-relerr_exp2: 1.69 * 2^-34 (Relative error of exp2(ylogx).)
-*/
+relerr_exp2: 1.69 * 2^-34 (Relative error of exp2(ylogx).).  */
 
 #define N (1 << POWF_LOG2_TABLE_BITS)
 #define T __powf_log2_data.tab
@@ -27,11 +27,10 @@ relerr_exp2: 1.69 * 2^-34 (Relative error of exp2(ylogx).)
 
 /* Subnormal input is normalized so ix has negative biased exponent.
    Output is multiplied by N (POWF_SCALE) if TOINT_INTRINICS is set.  */
-static inline double_t
+static inline double
 log2_inline (uint32_t ix)
 {
-  /* double_t for better performance on targets with FLT_EVAL_METHOD==2.  */
-  double_t z, r, r2, r4, p, q, y, y0, invc, logc;
+  double z, r, r2, r4, p, q, y, y0, invc, logc;
   uint32_t iz, top, tmp;
   int k, i;
 
@@ -42,14 +41,14 @@ log2_inline (uint32_t ix)
   i = (tmp >> (23 - POWF_LOG2_TABLE_BITS)) % N;
   top = tmp & 0xff800000;
   iz = ix - top;
-  k = (int32_t) top >> (23 - POWF_SCALE_BITS); /* arithmetic shift */
+  k = (int32_t) top >> (23 - POWF_SCALE_BITS); /* arithmetic shift.  */
   invc = T[i].invc;
   logc = T[i].logc;
-  z = (double_t) asfloat (iz);
+  z = asfloat (iz);
 
-  /* log2(x) = log1p(z/c-1)/ln2 + log2(c) + k */
+  /* log2(x) = log1p(z/c-1)/ln2 + log2(c) + k.  */
   r = z * invc - 1;
-  y0 = logc + (double_t) k;
+  y0 = logc + (double) k;
 
   /* Pipelined polynomial evaluation to approximate log1p(r)/ln2.  */
   r2 = r * r;
@@ -72,28 +71,27 @@ log2_inline (uint32_t ix)
    (in case of fast toint intrinsics) or not.  The unscaled xd must be
    in [-1021,1023], sign_bias sets the sign of the result.  */
 static inline float
-exp2_inline (double_t xd, uint32_t sign_bias)
+exp2_inline (double xd, uint32_t sign_bias)
 {
   uint64_t ki, ski, t;
-  /* double_t for better performance on targets with FLT_EVAL_METHOD==2.  */
-  double_t kd, z, r, r2, y, s;
+  double kd, z, r, r2, y, s;
 
 #if TOINT_INTRINSICS
 # define C __exp2f_data.poly_scaled
-  /* N*x = k + r with r in [-1/2, 1/2] */
-  kd = roundtoint (xd); /* k */
+  /* N*x = k + r with r in [-1/2, 1/2].  */
+  kd = roundtoint (xd); /* k.  */
   ki = converttoint (xd);
 #else
 # define C __exp2f_data.poly
 # define SHIFT __exp2f_data.shift_scaled
-  /* x = k/N + r with r in [-1/(2N), 1/(2N)] */
+  /* x = k/N + r with r in [-1/(2N), 1/(2N)].  */
   kd = eval_as_double (xd + SHIFT);
   ki = asuint64 (kd);
-  kd -= SHIFT; /* k/N */
+  kd -= SHIFT; /* k/N.  */
 #endif
   r = xd - kd;
 
-  /* exp2(x) = 2^(k/N) * 2^r ~= s * (C0*r^3 + C1*r^2 + C2*r + 1) */
+  /* exp2(x) = 2^(k/N) * 2^r ~= s * (C0*r^3 + C1*r^2 + C2*r + 1).  */
   t = T[ki % N];
   ski = ki + sign_bias;
   t += ski << (52 - EXP2F_TABLE_BITS);
@@ -104,29 +102,6 @@ exp2_inline (double_t xd, uint32_t sign_bias)
   y = z * r2 + y;
   y = y * s;
   return eval_as_float (y);
-}
-
-/* Returns 0 if not int, 1 if odd int, 2 if even int.  The argument is
-   the bit representation of a non-zero finite floating-point value.  */
-static inline int
-checkint (uint32_t iy)
-{
-  int e = iy >> 23 & 0xff;
-  if (e < 0x7f)
-    return 0;
-  if (e > 0x7f + 23)
-    return 2;
-  if (iy & ((1 << (0x7f + 23 - e)) - 1))
-    return 0;
-  if (iy & (1 << (0x7f + 23 - e)))
-    return 1;
-  return 2;
-}
-
-static inline int
-zeroinfnan (uint32_t ix)
-{
-  return 2 * ix - 1 >= 2u * 0x7f800000 - 1;
 }
 
 float
@@ -156,7 +131,7 @@ powf (float x, float y)
 	}
       if (unlikely (zeroinfnan (ix)))
 	{
-	  float_t x2 = x * x;
+	  float x2 = x * x;
 	  if (ix & 0x80000000 && checkint (iy) == 1)
 	    {
 	      x2 = -x2;
@@ -189,30 +164,39 @@ powf (float x, float y)
 	  ix -= 23 << 23;
 	}
     }
-  double_t logx = log2_inline (ix);
-  double_t ylogx = y * logx; /* Note: cannot overflow, y is single prec.  */
+  /* y * log2(x) cannot overflow since y is single precision.  */
+  double ylogx = (double) y * log2_inline (ix);
+
+  /* Check whether |y*log(x)| >= 126.  */
   if (unlikely ((asuint64 (ylogx) >> 47 & 0xffff)
 		 >= asuint64 (126.0 * POWF_SCALE) >> 47))
     {
-      /* |y*log(x)| >= 126.  */
-      if (ylogx > 0x1.fffffffd1d571p+6 * POWF_SCALE)
-	/* |x^y| > 0x1.ffffffp127.  */
-	return __math_oflowf (sign_bias);
-      if (WANT_ROUNDING && WANT_ERRNO
-	  && ylogx > 0x1.fffffffa3aae2p+6 * POWF_SCALE)
-	/* |x^y| > 0x1.fffffep127, check if we round away from 0.  */
-	if ((!sign_bias
-	     && eval_as_float (1.0f + opt_barrier_float (0x1p-25f)) != 1.0f)
-	    || (sign_bias
-		&& eval_as_float (-1.0f - opt_barrier_float (0x1p-25f))
-		     != -1.0f))
-	  return __math_oflowf (sign_bias);
       if (ylogx <= -150.0 * POWF_SCALE)
 	return __math_uflowf (sign_bias);
-#if WANT_ERRNO_UFLOW
-      if (ylogx < -149.0 * POWF_SCALE)
+
+      if (WANT_ERRNO_UFLOW && ylogx < -149.0 * POWF_SCALE)
 	return __math_may_uflowf (sign_bias);
-#endif
+
+      /* |x^y| > 0x1.ffffffp127.  */
+      if (!WANT_ROUNDING && ylogx > 0x1.fffffffd1d571p+6 * POWF_SCALE)
+	return __math_oflowf (sign_bias);
+
+      if (WANT_ROUNDING && ylogx > 0x1.fffffffa3aae2p+6 * POWF_SCALE)
+	{
+	  if (ylogx > 0x1.fffffffd1d571p+6 * POWF_SCALE)
+	    return __math_oflowf (sign_bias);
+
+	  /* |x^y| > 0x1.fffffep127, check if we round away from 0.  */
+	  if (ylogx != 0x1.fffffffa3aae3p+6 * POWF_SCALE)
+	    {
+	      float x = opt_barrier_float (0x1p-25f);
+	      if ((!sign_bias && eval_as_float (1.0f + x) != 1.0f)
+		  || (sign_bias && eval_as_float (-1.0f - x) != -1.0f))
+		return __math_oflowf (sign_bias);
+	    }
+
+	  return sign_bias ? -0x1.fffffep127 : 0x1.fffffep127;
+	}
     }
   return exp2_inline (ylogx, sign_bias);
 }

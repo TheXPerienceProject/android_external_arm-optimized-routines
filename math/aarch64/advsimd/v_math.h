@@ -1,7 +1,7 @@
 /*
  * Vector math abstractions.
  *
- * Copyright (c) 2019-2024, Arm Limited.
+ * Copyright (c) 2019-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
@@ -20,6 +20,9 @@
 #define V_NAME_D2(fun) _ZGVnN2vv_##fun
 #define V_NAME_F1_L1(fun) _ZGVnN4vl4_##fun##f
 #define V_NAME_D1_L1(fun) _ZGVnN2vl8_##fun
+
+#define V_NAME_F1_STRET(fun) _ZGVnN4v_##fun##f_stret
+#define V_NAME_D1_STRET(fun) _ZGVnN2v_##fun##_stret
 
 #if USE_GLIBC_ABI
 
@@ -124,11 +127,6 @@ v_call2_f32 (float (*f) (float, float), float32x4_t x1, float32x4_t x2,
 			p[2] ? f (x1[2], x2[2]) : y[2],
 			p[3] ? f (x1[3], x2[3]) : y[3] };
 }
-static inline float32x4_t
-v_zerofy_f32 (float32x4_t x, uint32x4_t mask)
-{
-  return vreinterpretq_f32_u32 (vbicq_u32 (vreinterpretq_u32_f32 (x), mask));
-}
 
 static inline int
 v_lanes64 (void)
@@ -181,6 +179,19 @@ v_call_f64 (double (*f) (double), float64x2_t x, float64x2_t y, uint64x2_t p)
 }
 
 static inline float64x2_t
+v_call_vpcs_f64 (double (VPCS_ATTR *f) (double), float64x2_t x, float64x2_t y,
+		 uint64x2_t p)
+{
+  double p1 = p[1];
+  double x1 = x[1];
+  if (likely (p[0]))
+    y[0] = f (x[0]);
+  if (likely (p1))
+    y[1] = f (x1);
+  return y;
+}
+
+static inline float64x2_t
 v_call2_f64 (double (*f) (double, double), float64x2_t x1, float64x2_t x2,
 	     float64x2_t y, uint64x2_t p)
 {
@@ -192,11 +203,6 @@ v_call2_f64 (double (*f) (double, double), float64x2_t x1, float64x2_t x2,
   if (likely (p1))
     y[1] = f (x1h, x2h);
   return y;
-}
-static inline float64x2_t
-v_zerofy_f64 (float64x2_t x, uint64x2_t mask)
-{
-  return vreinterpretq_f64_u64 (vbicq_u64 (vreinterpretq_u64_f64 (x), mask));
 }
 
 #endif
