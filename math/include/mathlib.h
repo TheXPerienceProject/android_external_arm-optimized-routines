@@ -1,7 +1,7 @@
 /*
  * Public API.
  *
- * Copyright (c) 2015-2025, Arm Limited.
+ * Copyright (c) 2015-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
@@ -16,7 +16,6 @@ float arm_math_sinpif (float);
 double arm_math_sinpi (double);
 float arm_math_tanpif (float);
 double arm_math_tanpi (double);
-double arm_math_atan2pi (double, double);
 void arm_math_sincospif (float, float *, float *);
 void arm_math_sincospi (double, double *, double *);
 #endif
@@ -125,6 +124,7 @@ __vpcs float32x4_t _ZGVnN4v_cbrtf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_cosf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_coshf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_cospif (float32x4_t);
+__vpcs float32x4_t _ZGVnN4v_cr_expf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_erfcf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_erff (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_exp10f (float32x4_t);
@@ -135,6 +135,7 @@ __vpcs float32x4_t _ZGVnN4v_exp10m1f (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_expf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_expf_1u (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_expm1f (float32x4_t);
+__vpcs float32x4_t _ZGVnN4v_lgammaf (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_log10f (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_log10p1f (float32x4_t);
 __vpcs float32x4_t _ZGVnN4v_log1pf (float32x4_t);
@@ -181,6 +182,7 @@ __vpcs float64x2_t _ZGVnN2v_exp10m1 (float64x2_t);
 __vpcs float64x2_t _ZGVnN2v_exp2 (float64x2_t);
 __vpcs float64x2_t _ZGVnN2v_exp2m1 (float64x2_t);
 __vpcs float64x2_t _ZGVnN2v_expm1 (float64x2_t);
+__vpcs float64x2_t _ZGVnN2v_lgamma (float64x2_t);
 __vpcs float64x2_t _ZGVnN2v_log (float64x2_t);
 __vpcs float64x2_t _ZGVnN2v_log10 (float64x2_t);
 __vpcs float64x2_t _ZGVnN2v_log10p1 (float64x2_t);

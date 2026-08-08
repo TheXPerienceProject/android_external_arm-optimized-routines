@@ -1,7 +1,7 @@
 /*
  * Double-precision SVE 10^x function.
  *
- * Copyright (c) 2023-2025, Arm Limited.
+ * Copyright (c) 2023-2026, Arm Limited.
  * SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
  */
 
@@ -9,12 +9,20 @@
 #include "test_sig.h"
 #include "test_defs.h"
 
-#define SpecialBound 307.0 /* floor (log10 (2^1023)).  */
+/* Value of |x| above which scale overflows without special treatment.
+   log10(2^1022 + 1/128) ~ 307.65.  */
+#define SpecialBound 0x1.33a7ae900b507p+8
+
+/* Values of x over which exp10 overflows or underflows.  */
+#define InfBound 0x1.35p+8		/* 309.0.  */
+#define ZeroBound -0x1.439b746e36b53p+8 /* ~ -323.61.  */
 
 static const struct data
 {
-  double c1, c3, c2, c4, c0;
-  double shift, log10_2, log2_10_hi, log2_10_lo, scale_thres, special_bound;
+  double log2_10_hi, log2_10_lo;
+  double log10_2, c0;
+  double c1, c3, c2, c4;
+  double shift, special_bound, inf_bound, zero_bound;
 } data = {
   /* Coefficients generated using Remez algorithm.
      rel error: 0x1.9fcb9b3p-60
@@ -30,101 +38,112 @@ static const struct data
   .log10_2 = 0x1.a934f0979a371p1,     /* 1/log2(10).  */
   .log2_10_hi = 0x1.34413509f79ffp-2, /* log2(10).  */
   .log2_10_lo = -0x1.9dc1da994fd21p-59,
-  .scale_thres = 1280.0,
   .special_bound = SpecialBound,
+  .inf_bound = InfBound,
+  .zero_bound = ZeroBound,
 };
 
-#define SpecialOffset 0x6000000000000000 /* 0x1p513.  */
-/* SpecialBias1 + SpecialBias1 = asuint(1.0).  */
-#define SpecialBias1 0x7000000000000000 /* 0x1p769.  */
-#define SpecialBias2 0x3010000000000000 /* 0x1p-254.  */
-
-/* Update of both special and non-special cases, if any special case is
-   detected.  */
 static inline svfloat64_t
-special_case (svbool_t pg, svfloat64_t s, svfloat64_t y, svfloat64_t n,
-	      const struct data *d)
+exp10_inline (svfloat64_t x, const svbool_t pg, const struct data *d)
 {
-  /* s=2^n may overflow, break it up into s=s1*s2,
-     such that exp = s + s*y can be computed as s1*(s2+s2*y)
-     and s1*s1 overflows only if n>0.  */
-
-  /* If n<=0 then set b to 0x6, 0 otherwise.  */
-  svbool_t p_sign = svcmple (pg, n, 0.0); /* n <= 0.  */
-  svuint64_t b = svdup_u64_z (p_sign, SpecialOffset);
-
-  /* Set s1 to generate overflow depending on sign of exponent n.  */
-  svfloat64_t s1 = svreinterpret_f64 (svsubr_x (pg, b, SpecialBias1));
-  /* Offset s to avoid overflow in final result if n is below threshold.  */
-  svfloat64_t s2 = svreinterpret_f64 (
-      svadd_x (pg, svsub_x (pg, svreinterpret_u64 (s), SpecialBias2), b));
-
-  /* |n| > 1280 => 2^(n) overflows.  */
-  svbool_t p_cmp = svacgt (pg, n, d->scale_thres);
-
-  svfloat64_t r1 = svmul_x (svptrue_b64 (), s1, s1);
-  svfloat64_t r2 = svmla_x (pg, s2, s2, y);
-  svfloat64_t r0 = svmul_x (svptrue_b64 (), r2, s1);
-
-  return svsel (p_cmp, r1, r0);
-}
-
-/* Fast vector implementation of exp10 using FEXPA instruction.
-   Maximum measured error is 1.02 ulp.
-   SV_NAME_D1 (exp10)(-0x1.2862fec805e58p+2) got 0x1.885a89551d782p-16
-					    want 0x1.885a89551d781p-16.  */
-svfloat64_t SV_NAME_D1 (exp10) (svfloat64_t x, svbool_t pg)
-{
-  const struct data *d = ptr_barrier (&data);
-  svbool_t no_big_scale = svacle (pg, x, d->special_bound);
-  svbool_t special = svnot_z (pg, no_big_scale);
-
-  /* n = round(x/(log10(2)/N)).  */
+  /* n is x/log10(2) rounded to the nearest multiple of 1/64.  */
   svfloat64_t shift = sv_f64 (d->shift);
-  svfloat64_t z = svmla_x (pg, shift, x, d->log10_2);
+  svfloat64_t log10_2_c0 = svld1rq (svptrue_b64 (), &d->log10_2);
+  svfloat64_t z = svmla_lane (shift, x, log10_2_c0, 0);
   svfloat64_t n = svsub_x (pg, z, shift);
 
-  /* r = x - n*log10(2)/N.  */
+  /* r = x - n*log10(2).  */
   svfloat64_t log2_10 = svld1rq (svptrue_b64 (), &d->log2_10_hi);
   svfloat64_t r = x;
   r = svmls_lane (r, n, log2_10, 0);
   r = svmls_lane (r, n, log2_10, 1);
 
-  /* scale = 2^(n/N), computed using FEXPA. FEXPA does not propagate NaNs, so
-     for consistent NaN handling we have to manually propagate them. This
-     comes at significant performance cost.  */
-  svuint64_t u = svreinterpret_u64 (z);
-  svfloat64_t scale = svexpa (u);
+  svfloat64_t scale = svexpa (svreinterpret_u64 (z));
   svfloat64_t c24 = svld1rq (svptrue_b64 (), &d->c2);
+
   /* Approximate exp10(r) using polynomial.  */
   svfloat64_t r2 = svmul_x (svptrue_b64 (), r, r);
   svfloat64_t p12 = svmla_lane (sv_f64 (d->c1), r, c24, 0);
   svfloat64_t p34 = svmla_lane (sv_f64 (d->c3), r, c24, 1);
   svfloat64_t p14 = svmla_x (pg, p12, p34, r2);
 
-  svfloat64_t y = svmla_x (pg, svmul_x (svptrue_b64 (), r, d->c0), r2, p14);
+  svfloat64_t poly = svmla_x (pg, svmul_lane (r, log10_2_c0, 1), r2, p14);
 
-  /* Assemble result as exp10(x) = 2^n * exp10(r).  If |x| > SpecialBound
-     multiplication may overflow, so use special case routine.  */
-  if (unlikely (svptest_any (pg, special)))
-    {
-      /* FEXPA zeroes the sign bit, however the sign is meaningful to the
-	 special case function so needs to be copied.
-	 e = sign bit of u << 46.  */
-      svuint64_t e = svand_x (pg, svlsl_x (pg, u, 46), 0x8000000000000000);
-      /* Copy sign to scale.  */
-      scale = svreinterpret_f64 (svadd_x (pg, e, svreinterpret_u64 (scale)));
-      return special_case (pg, scale, y, n, d);
-    }
+  return svmla_x (pg, scale, scale, poly);
+}
 
-  /* No special case.  */
-  return svmla_x (pg, scale, scale, y);
+static svfloat64_t NOINLINE
+special_case (svfloat64_t x, const svbool_t pg, const struct data *d)
+{
+  /* Computes the offset and scale factor based on sign of the input.  */
+  svbool_t is_negative = svcmplt (pg, x, 0.0);
+  svfloat64_t offset = svneg_m (sv_f64 (53.0), is_negative, sv_f64 (53.0));
+  svint64_t scale_adjust = svneg_m (sv_s64 (53), is_negative, sv_s64 (53));
+
+  /* Bounds x between zero_bound and inf_bound, where exp10(x) would return
+     0 or inf. By clamping x to these bounds, the behaviour of large values
+     is more predictable.  */
+  x = svmin_x (pg, svmax_x (pg, x, d->zero_bound), d->inf_bound);
+
+  /* exp10(x) = 2^(n/N) * 10^r = 2^n * (1 + poly(r)),
+     with 1 + poly(r) in [1/sqrt(2), sqrt(2)] and
+     x = r + n * log10(2) / N, with r in [-log10(2)/2N, log10(2)/2N].  */
+  svfloat64_t shift = sv_f64 (d->shift);
+  svfloat64_t log10_2_c0 = svld1rq (svptrue_b64 (), &d->log10_2);
+
+  /* n is x/log10(2) rounded to the nearest multiple of 1/64.  */
+  svfloat64_t z = svmla_lane (shift, x, log10_2_c0, 0);
+  svfloat64_t n = svsub_x (pg, z, shift);
+
+  /* r = x - n*log10(2).  */
+  svfloat64_t log2_10 = svld1rq (svptrue_b64 (), &d->log2_10_hi);
+  svfloat64_t r = x;
+  r = svmls_lane (r, n, log2_10, 0);
+  r = svmls_lane (r, n, log2_10, 1);
+
+  /* Computes scale with an offset, which returns scale = 2^(n - 53).  */
+  z = svsub_x (pg, z, offset);
+  svfloat64_t scale = svexpa (svreinterpret_u64 (z));
+
+  svfloat64_t c24 = svld1rq (svptrue_b64 (), &d->c2);
+
+  /* Approximate exp10(r) using polynomial.  */
+  svfloat64_t r2 = svmul_x (svptrue_b64 (), r, r);
+  svfloat64_t p12 = svmla_lane (sv_f64 (d->c1), r, c24, 0);
+  svfloat64_t p34 = svmla_lane (sv_f64 (d->c3), r, c24, 1);
+  svfloat64_t p14 = svmla_x (pg, p12, p34, r2);
+
+  svfloat64_t poly = svmla_x (pg, svmul_lane (r, log10_2_c0, 1), r2, p14);
+
+  /* Reconstruct y as 2^(n - 53) * (1 + poly(r)).  */
+  svfloat64_t y = svmla_x (pg, scale, scale, poly);
+
+  /* Scale the result by 2^53:
+     2^n * (1 + poly(r)) = 2^53 * 2^(n - 53) * (1 + poly(r)).  */
+  return svscale_x (pg, y, scale_adjust);
+}
+
+/* Vector version of exp10
+   The maximum observed error is 0.52 + 0.5 ULP.
+   _ZGVsMxv_exp10(-0x1.2862fec805e58p+2)
+    got 0x1.885a89551d782p-16
+   want 0x1.885a89551d781p-16.  */
+svfloat64_t SV_NAME_D1 (exp10) (svfloat64_t x, svbool_t pg)
+{
+  const struct data *d = ptr_barrier (&data);
+  svbool_t special = svacgt (pg, x, d->special_bound);
+  if (unlikely (svptest_any (special, special)))
+    return special_case (x, pg, d);
+  return exp10_inline (x, pg, d);
 }
 
 #if WANT_EXP10_TESTS
 TEST_SIG (SV, D, 1, exp10, -9.9, 9.9)
 TEST_ULP (SV_NAME_D1 (exp10), 0.52)
 TEST_SYM_INTERVAL (SV_NAME_D1 (exp10), 0, SpecialBound, 10000)
-TEST_SYM_INTERVAL (SV_NAME_D1 (exp10), SpecialBound, inf, 1000)
+TEST_INTERVAL (SV_NAME_D1 (exp10), SpecialBound, InfBound, 10000)
+TEST_INTERVAL (SV_NAME_D1 (exp10), -SpecialBound, ZeroBound, 10000)
+TEST_INTERVAL (SV_NAME_D1 (exp10), InfBound, inf, 1000)
+TEST_INTERVAL (SV_NAME_D1 (exp10), ZeroBound, -inf, 1000)
 #endif
 CLOSE_SVE_ATTR
